@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------- USER & PROFILE ----------
+
+model User {
+  id            String   @id @default(uuid()) // maps to Supabase auth.users.id
+  email         String   @unique
+  username      String?  @unique
+  avatarUrl     String?
+  theme         String   @default("light")
+  language      String   @default("en")
+  timezone      String   @default("UTC")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  onboarding    Onboarding?
+  trades        Trade[]
+  plan          TradingPlan?
+  guardrails    Guardrail[]
+  notebookEntries NotebookEntry[]
+  sanctuaryLogs SanctuaryLog[]
+  checklists    DailyChecklist[]
+  coachMessages CoachMessage[]
+  academyProgress AcademyProgress[]
+  ruleViolations RuleViolation[]
+  brokers       ConnectedBroker[]
+}
+
+model Onboarding {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experienceLevel  String   // beginner | intermediate | advanced | professional
+  markets          String[] // forex, futures, equities, options, crypto
+  broker           String?
+  riskPercent      Float    @default(1.0)
+  dailyGoal        Float?
+  weeklyGoal       Float?
+  monthlyGoal      Float?
+  tradingSessions  String[] // london, new_york, tokyo, sydney
+  psychChallenges  String[] // revenge_trading, overtrading, fear, fomo
+  completedAt      DateTime @default(now())
+}
+
+// ---------- JOURNAL ----------
+
+model Trade {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pair           String
+  market         String    // forex | futures | equities | options | crypto
+  direction      String    // long | short
+  entryPrice     Float
+  exitPrice      Float?
+  stopLoss       Float?
+  takeProfit     Float?
+  riskAmount     Float?
+  rewardAmount   Float?
+  riskReward     Float?
+  pnl            Float?
+  emotion        String?   // calm, anxious, confident, fearful, greedy
+  confidence     Int?      // 1-10
+  setup          String?
+  mistakes       String[]
+  lessons        String?
+  tags           String[]
+  beforeNotes    String?
+  afterNotes     String?
+  aiAnalysis     String?
+  screenshotUrls String[]
+  enteredAt      DateTime
+  exitedAt       DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([userId, enteredAt])
+}
+
+// ---------- PLAN ----------
+
+model TradingPlan {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rules           String[]
+  dailyRoutine    String[]
+  weeklyGoals     String[]
+  monthlyGoals    String[]
+  riskRules       String[]
+  allowedSessions String[]
+  checklistItems  String[]
+  updatedAt       DateTime @updatedAt
+}
+
+// ---------- GUARDRAILS ----------
+
+model Guardrail {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type            String   // max_daily_loss | max_weekly_loss | max_monthly_loss | max_trades | cooldown | session_lock
+  threshold       Float
+  windowMinutes   Int?     // for cooldown/session timers
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+}
+
+model RuleViolation {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guardrailId String?
+  type        String   // exceeded_trade_count, outside_session, skipped_checklist, revenge_trading, overtrading
+  description String
+  occurredAt  DateTime @default(now())
+}
+
+// ---------- NOTEBOOK ----------
+
+model NotebookEntry {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // idea | strategy | book | video | template | mindset
+  title     String
+  content   String   // markdown
+  tags      String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------- SANCTUARY ----------
+
+model SanctuaryLog {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mood        Int      // 1-10
+  stressLevel Int      // 1-10
+  gratitude   String?
+  journalText String?
+  activity    String?  // meditation | breathing | music | focus_mode
+  createdAt   DateTime @default(now())
+}
+
+// ---------- DAILY CHECKLIST ----------
+
+model DailyChecklist {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  items     Json     // [{ label: string, done: boolean }]
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
+}
+
+// ---------- AI COACH ----------
+
+model CoachMessage {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   // user | assistant
+  content   String
+  createdAt DateTime @default(now())
+}
+
+// ---------- ACADEMY ----------
+
+model AcademyProgress {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId    String
+  completed   Boolean  @default(false)
+  quizScore   Int?
+  certificate Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, lessonId])
+}
+
+// ---------- BROKERS ----------
+
+model ConnectedBroker {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brokerName  String
+  status      String   @default("pending") // pending | connected | error
+  apiKeyRef   String?  // reference to secret in vault, never store raw keys here
+  connectedAt DateTime @default(now())
+}
